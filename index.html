@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+  <title>Onda Reale Charter</title>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Onda Reale"/>
+  <meta name="theme-color" content="#0a0f1e"/>
+  <!-- Icon inline SVG via link -->
+  <link rel="apple-touch-icon" href="icon.png"/>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{background:#0a0f1e;font-family:'Inter',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+    input,select,textarea,button{font-family:inherit;-webkit-appearance:none;appearance:none}
+    ::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-track{background:#1e293b} ::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// Storage
+const KEYS = {bookings:"or_b",clients:"or_c",quotes:"or_q"};
+const load = k => { try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch{return null;} };
+const save = (k,v) => { try{localStorage.setItem(k,JSON.stringify(v));}catch{} };
+
+// Helpers
+const uid = () => Math.random().toString(36).slice(2,9);
+const today = () => new Date().toISOString().slice(0,10);
+const fmt = d => d?new Date(d+"T00:00:00").toLocaleDateString("it-IT"):"—";
+const nts = (a,b) => (!a||!b)?0:Math.max(0,(new Date(b)-new Date(a))/86400000);
+const MI = ["Gen","Feb","Mar","Apr","Mag","Giu","Lug","Ago","Set","Ott","Nov","Dic"];
+const SC = {Confermata:"#0ea5e9",Opzione:"#f59e0b",Cancellata:"#ef4444",Completata:"#10b981"};
+const QC = {Bozza:"#94a3b8",Inviato:"#f59e0b",Accettato:"#10b981",Rifiutato:"#ef4444"};
+
+// Styles
+const INP = {background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"9px 12px",width:"100%",fontSize:14,boxSizing:"border-box",WebkitAppearance:"none"};
+const BP = {background:"#0ea5e9",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",cursor:"pointer",fontWeight:700,fontSize:14};
+const BG = {background:"transparent",color:"#94a3b8",border:"1px solid #334155",borderRadius:8,padding:"10px 20px",cursor:"pointer",fontWeight:600,fontSize:14};
+
+function Badge({color,label}){return <span style={{background:color+"22",color,border:`1px solid ${color}44`,borderRadius:6,padding:"2px 10px",fontSize:12,fontWeight:600}}>{label}</span>}
+
+function Modal({title,onClose,children}){
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 0 0 0"}}>
+    <div style={{background:"#0f172a",border:"1px solid #1e3a5f",borderRadius:"16px 16px 0 0",width:"100%",maxHeight:"92vh",overflowY:"auto",padding:24}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
+        <h3 style={{margin:0,color:"#e2e8f0",fontSize:17}}>{title}</h3>
+        <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:24,cursor:"pointer",padding:"0 4px"}}>×</button>
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
+function Field({label,children}){return <div style={{marginBottom:14}}>
+  <label style={{display:"block",color:"#94a3b8",fontSize:11,marginBottom:4,fontWeight:700,letterSpacing:.6}}>{label.toUpperCase()}</label>
+  {children}
+</div>;}
+
+// PDF
+function exportPDF(q,clients){
+  const cn=q.client||clients.find(c=>c.id===q.clientId)?.name||"—";
+  const rows=q.items.map(it=>{const s=(parseFloat(it.qty)||0)*(parseFloat(it.unit)||0);return `<tr><td style="padding:8px;border-bottom:1px solid #eee">${it.desc}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${it.qty}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">€${parseFloat(it.unit||0).toLocaleString("it-IT")}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">€${s.toLocaleString("it-IT")}</td></tr>`;}).join("");
+  const w=window.open("","_blank");
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preventivo</title><style>body{font-family:Arial;padding:40px;color:#1e293b}table{width:100%;border-collapse:collapse}th{background:#0ea5e9;color:#fff;padding:10px;text-align:left}</style></head><body><h2 style="color:#0ea5e9">⚓ Onda Reale Charter</h2><p>DPI Immobiliare SRL · Marsala</p><hr/><p><b>${cn}</b> · ${fmt(q.from)} → ${fmt(q.to)} · ${nts(q.from,q.to)} notti</p><table><thead><tr><th>Descrizione</th><th>Qtà</th><th>Prezzo</th><th>Totale</th></tr></thead><tbody>${rows}</tbody></table><p style="text-align:right;font-size:20px;font-weight:700;margin-top:16px;color:#0ea5e9">TOTALE: €${(q.total||0).toLocaleString("it-IT")}</p>${q.notes?`<p><b>Note:</b> ${q.notes}</p>`:""}<p style="margin-top:40px;font-size:12px;color:#64748b">Preventivo valido 15 giorni · Onda Reale Charter</p></body></html>`);
+  w.document.close();setTimeout(()=>w.print(),400);
+}
+
+// Messaggi
+const TMPL=[
+  {id:"conf",label:"✅ Conferma",gen:b=>`Gentile ${b.client},\n\nConfermiamo la prenotazione:\n📅 ${fmt(b.from)} → ${fmt(b.to)}\n⛵ ${b.boat||"Altamarea 35 GT"}\n👥 ${b.crew} persone\n💰 € ${parseFloat(b.price||0).toLocaleString("it-IT")}\n\n${b.deposit?`Acconto richiesto: € ${parseFloat(b.deposit).toLocaleString("it-IT")} entro 48h.\n\n`:""}A presto!\nOnda Reale Charter`},
+  {id:"rem",label:"⏰ Promemoria",gen:b=>`Gentile ${b.client},\n\nImbarco il ${fmt(b.from)} al Porto di Marsala.\nPresentarsi 30 min prima con documento d'identità.\n\nBuona navigazione!\nOnda Reale Charter`},
+  {id:"acc",label:"💳 Acconto",gen:b=>`Gentile ${b.client},\n\nRicordiamo l'acconto di € ${parseFloat(b.deposit||0).toLocaleString("it-IT")} per la prenotazione del ${fmt(b.from)}.\n\nCordiali saluti,\nOnda Reale Charter`},
+  {id:"rev",label:"⭐ Recensione",gen:b=>`Gentile ${b.client},\n\nSperiamo che l'esperienza a bordo sia stata indimenticabile!\nCi farebbe piacere una recensione su Booking.com o Google.\n\nGrazie!\nOnda Reale Charter`},
+  {id:"can",label:"❌ Cancellazione",gen:b=>`Gentile ${b.client},\n\nPrendiamo atto della cancellazione del ${fmt(b.from)}.\nRimborso secondo le condizioni contrattuali.\n\nOnda Reale Charter`},
+];
+
+function MessaggiView({bookings}){
+  const [sb,setSb]=useState("");const [st,setSt]=useState("conf");const [txt,setTxt]=useState("");const [cp,setCp]=useState(false);
+  const bks=bookings.filter(b=>b.status!=="Cancellata").sort((a,b)=>a.from.localeCompare(b.from));
+  useEffect(()=>{if(sb){const b=bookings.find(x=>x.id===sb);const t=TMPL.find(t=>t.id===st);if(b&&t)setTxt(t.gen(b));}else setTxt("");},[sb,st,bookings]);
+  const copy=()=>{navigator.clipboard.writeText(txt);setCp(true);setTimeout(()=>setCp(false),2000);};
+  return <div>
+    <Field label="Prenotazione"><select style={INP} value={sb} onChange={e=>setSb(e.target.value)}><option value="">— seleziona —</option>{bks.map(b=><option key={b.id} value={b.id}>{b.client} · {fmt(b.from)}</option>)}</select></Field>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+      {TMPL.map(t=><button key={t.id} onClick={()=>setSt(t.id)} style={{...BG,fontSize:12,padding:"6px 12px",color:st===t.id?"#0ea5e9":"#94a3b8",borderColor:st===t.id?"#0ea5e9":"#334155"}}>{t.label}</button>)}
+    </div>
+    {!sb&&<div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:32,textAlign:"center",color:"#64748b"}}>Seleziona una prenotazione</div>}
+    {sb&&<><textarea style={{...INP,minHeight:220,resize:"vertical",fontFamily:"monospace",fontSize:13,lineHeight:1.6}} value={txt} onChange={e=>setTxt(e.target.value)}/>
+    <div style={{display:"flex",gap:10,justifyContent:"flex-end",marginTop:10}}>
+      <button style={BG} onClick={()=>{const b=bookings.find(x=>x.id===sb);const t=TMPL.find(t=>t.id===st);if(b&&t)setTxt(t.gen(b));}}>↺</button>
+      <button style={{...BP,background:cp?"#10b981":"#0ea5e9"}} onClick={copy}>{cp?"✓ Copiato!":"📋 Copia"}</button>
+    </div></>}
+  </div>;
+}
+
+function StatsView({bookings}){
+  const [yr,setYr]=useState(new Date().getFullYear());
+  const yrs=[...new Set(bookings.map(b=>b.from?.slice(0,4)).filter(Boolean))].sort().reverse();
+  const bm=Array.from({length:12},(_,i)=>{const m=String(i+1).padStart(2,"0");const mb=bookings.filter(b=>b.from?.startsWith(`${yr}-${m}`)&&b.status!=="Cancellata");return{l:MI[i],b:mb.length,r:mb.reduce((s,b)=>s+(parseFloat(b.price)||0),0),n:mb.reduce((s,b)=>s+nts(b.from,b.to),0)};});
+  const tr=bm.reduce((s,m)=>s+m.r,0),tb=bm.reduce((s,m)=>s+m.b,0),tn=bm.reduce((s,m)=>s+m.n,0),mx=Math.max(...bm.map(m=>m.r),1);
+  return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <span style={{color:"#e2e8f0",fontWeight:700}}>Anno</span>
+      <select style={{...INP,width:"auto"}} value={yr} onChange={e=>setYr(parseInt(e.target.value))}>
+        {(yrs.length?yrs:[String(new Date().getFullYear())]).map(y=><option key={y}>{y}</option>)}
+      </select>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+      {[{l:"FATTURATO",v:`€ ${tr.toLocaleString("it-IT")}`,c:"#0ea5e9"},{l:"PRENOTAZIONI",v:tb,c:"#10b981"},{l:"NOTTI",v:tn,c:"#f59e0b"},{l:"MEDIA",v:tb?`€ ${Math.round(tr/tb).toLocaleString("it-IT")}`:"—",c:"#a78bfa"}].map(k=>(
+        <div key={k.l} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:.5}}>{k.l}</div>
+          <div style={{color:k.c,fontSize:20,fontWeight:800,marginTop:4}}>{k.v}</div>
+        </div>
+      ))}
+    </div>
+    <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:16,marginBottom:16}}>
+      <div style={{color:"#e2e8f0",fontWeight:700,marginBottom:12}}>Fatturato mensile</div>
+      <div style={{display:"flex",alignItems:"flex-end",gap:3,height:100}}>
+        {bm.map((m,i)=>{const h=mx>0?(m.r/mx)*100:0;return(
+          <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <div style={{background:"#0ea5e933",borderRadius:"3px 3px 0 0",width:"100%",height:h+"%",minHeight:m.r>0?3:0,border:m.r>0?"1px solid #0ea5e9":"none"}}/>
+            <span style={{color:"#64748b",fontSize:8,fontWeight:600}}>{m.l}</span>
+          </div>
+        );})}
+      </div>
+    </div>
+    <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,overflow:"hidden"}}>
+      {bm.map((m,i)=>m.b>0&&<div key={i} style={{display:"flex",justifyContent:"space-between",padding:"10px 16px",borderBottom:"1px solid #0f172a"}}>
+        <span style={{color:"#94a3b8"}}>{m.l}</span>
+        <span style={{color:"#64748b"}}>{m.b} pren. · {m.n} notti</span>
+        <span style={{color:"#0ea5e9",fontWeight:700}}>€ {m.r.toLocaleString("it-IT")}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+
+function CalView({bookings,onAdd,onEdit}){
+  const [mo,setMo]=useState(()=>{const n=new Date();return{y:n.getFullYear(),m:n.getMonth()};});
+  const first=new Date(mo.y,mo.m,1),dim=new Date(mo.y,mo.m+1,0).getDate(),sd=(first.getDay()+6)%7;
+  const cells=[];for(let i=0;i<sd;i++)cells.push(null);for(let d=1;d<=dim;d++)cells.push(d);
+  const cd=d=>`${mo.y}-${String(mo.m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const bfd=d=>{const c=cd(d);return bookings.filter(b=>b.from<=c&&b.to>c&&b.status!=="Cancellata");};
+  const ts=today();
+  return <div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+      <button onClick={()=>setMo(p=>{const d=new Date(p.y,p.m-1);return{y:d.getFullYear(),m:d.getMonth()};})} style={{...BG,padding:"8px 14px"}}>‹</button>
+      <span style={{color:"#e2e8f0",fontWeight:700,fontSize:15,flex:1,textAlign:"center"}}>{first.toLocaleDateString("it-IT",{month:"long",year:"numeric"}).replace(/^\w/,c=>c.toUpperCase())}</span>
+      <button onClick={()=>setMo(p=>{const d=new Date(p.y,p.m+1);return{y:d.getFullYear(),m:d.getMonth()};})} style={{...BG,padding:"8px 14px"}}>›</button>
+      <button onClick={onAdd} style={{...BP,padding:"8px 14px"}}>+</button>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3,marginBottom:3}}>
+      {["L","M","M","G","V","S","D"].map((d,i)=><div key={i} style={{textAlign:"center",color:"#64748b",fontSize:10,fontWeight:700}}>{d}</div>)}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+      {cells.map((d,i)=>{
+        if(!d)return <div key={i}/>;
+        const c=cd(d),db=bfd(d),it=c===ts;
+        return <div key={i} style={{background:it?"#1e3a5f":"#1e293b",border:`1px solid ${it?"#0ea5e9":"#334155"}`,borderRadius:6,minHeight:52,padding:4,cursor:"pointer"}} onClick={()=>db.length===1?onEdit(db[0]):onAdd()}>
+          <div style={{color:it?"#0ea5e9":"#94a3b8",fontSize:11,fontWeight:it?700:400,marginBottom:2}}>{d}</div>
+          {db.slice(0,2).map(b=><div key={b.id} onClick={e=>{e.stopPropagation();onEdit(b);}} style={{background:SC[b.status]+"33",borderLeft:`2px solid ${SC[b.status]}`,borderRadius:3,padding:"1px 3px",fontSize:9,color:"#e2e8f0",marginBottom:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.client}</div>)}
+          {db.length>2&&<div style={{color:"#64748b",fontSize:9}}>+{db.length-2}</div>}
+        </div>;
+      })}
+    </div>
+    <div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}>
+      {Object.entries(SC).map(([s,c])=><div key={s} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{color:"#64748b",fontSize:10}}>{s}</span></div>)}
+    </div>
+  </div>;
+}
+
+function BkForm({booking,clients,onSave,onDelete,onClose}){
+  const [f,setF]=useState(booking||{id:uid(),client:"",clientId:"",boat:"Altamarea 35 GT",from:today(),to:"",crew:1,status:"Opzione",notes:"",price:"",deposit:"",depositPaid:false});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const selC=id=>{const c=clients.find(c=>c.id===id);if(c){set("clientId",id);set("client",c.name);}else{set("clientId","");set("client",id);}};
+  return <div>
+    <Field label="Cliente">
+      <select style={INP} value={f.clientId||""} onChange={e=>selC(e.target.value)}><option value="">— seleziona —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      <input style={{...INP,marginTop:6}} placeholder="O digita nome nuovo" value={f.client} onChange={e=>set("client",e.target.value)}/>
+    </Field>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Check-in"><input type="date" style={INP} value={f.from} onChange={e=>set("from",e.target.value)}/></Field>
+      <Field label="Check-out"><input type="date" style={INP} value={f.to} onChange={e=>set("to",e.target.value)}/></Field>
+    </div>
+    {f.from&&f.to&&<div style={{background:"#1e293b",borderRadius:8,padding:"8px 12px",color:"#0ea5e9",fontSize:13,marginBottom:14}}>🗓 {nts(f.from,f.to)} notti</div>}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Prezzo €"><input type="number" style={INP} value={f.price} onChange={e=>set("price",e.target.value)}/></Field>
+      <Field label="Acconto €"><input type="number" style={INP} value={f.deposit} onChange={e=>set("deposit",e.target.value)}/></Field>
+    </div>
+    <Field label="Stato"><select style={INP} value={f.status} onChange={e=>set("status",e.target.value)}>{Object.keys(SC).map(s=><option key={s}>{s}</option>)}</select></Field>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+      <input type="checkbox" id="dp" checked={f.depositPaid} onChange={e=>set("depositPaid",e.target.checked)} style={{width:18,height:18,accentColor:"#0ea5e9"}}/>
+      <label htmlFor="dp" style={{color:"#94a3b8",fontSize:14}}>Acconto ricevuto</label>
+    </div>
+    <Field label="Note"><textarea style={{...INP,minHeight:60,resize:"vertical"}} value={f.notes} onChange={e=>set("notes",e.target.value)}/></Field>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8,flexWrap:"wrap"}}>
+      {booking&&<button style={{...BG,color:"#ef4444",borderColor:"#ef444444"}} onClick={()=>{onDelete(booking.id);onClose();}}>Elimina</button>}
+      <button style={BG} onClick={onClose}>Annulla</button>
+      <button style={BP} onClick={()=>{onSave(f);onClose();}}>Salva</button>
+    </div>
+  </div>;
+}
+
+function ClForm({client,onSave,onDelete,onClose}){
+  const [f,setF]=useState(client||{id:uid(),name:"",email:"",phone:"",notes:""});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  return <div>
+    <Field label="Nome"><input style={INP} value={f.name} onChange={e=>set("name",e.target.value)}/></Field>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Email"><input style={INP} value={f.email} onChange={e=>set("email",e.target.value)}/></Field>
+      <Field label="Telefono"><input style={INP} value={f.phone} onChange={e=>set("phone",e.target.value)}/></Field>
+    </div>
+    <Field label="Note"><textarea style={{...INP,minHeight:50,resize:"vertical"}} value={f.notes} onChange={e=>set("notes",e.target.value)}/></Field>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
+      {client&&<button style={{...BG,color:"#ef4444",borderColor:"#ef444444"}} onClick={()=>{onDelete(client.id);onClose();}}>Elimina</button>}
+      <button style={BG} onClick={onClose}>Annulla</button>
+      <button style={BP} onClick={()=>{onSave(f);onClose();}}>Salva</button>
+    </div>
+  </div>;
+}
+
+function QtForm({quote,clients,onSave,onDelete,onClose}){
+  const [f,setF]=useState(quote||{id:uid(),client:"",clientId:"",date:today(),from:"",to:"",items:[{desc:"Noleggio barca",qty:1,unit:""}],status:"Bozza",notes:""});
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+  const si=(i,k,v)=>setF(p=>{const it=[...p.items];it[i]={...it[i],[k]:v};return{...p,items:it};});
+  const total=f.items.reduce((s,it)=>s+(parseFloat(it.qty)||0)*(parseFloat(it.unit)||0),0);
+  const selC=id=>{const c=clients.find(c=>c.id===id);if(c){set("clientId",id);set("client",c.name);}};
+  return <div>
+    <Field label="Cliente"><select style={INP} value={f.clientId||""} onChange={e=>selC(e.target.value)}><option value="">— seleziona —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Data"><input type="date" style={INP} value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
+      <Field label="Stato"><select style={INP} value={f.status} onChange={e=>set("status",e.target.value)}>{Object.keys(QC).map(s=><option key={s}>{s}</option>)}</select></Field>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <Field label="Inizio"><input type="date" style={INP} value={f.from} onChange={e=>set("from",e.target.value)}/></Field>
+      <Field label="Fine"><input type="date" style={INP} value={f.to} onChange={e=>set("to",e.target.value)}/></Field>
+    </div>
+    <label style={{display:"block",color:"#94a3b8",fontSize:11,marginBottom:8,fontWeight:700,letterSpacing:.6}}>VOCI</label>
+    {f.items.map((it,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr 60px 70px 28px",gap:6,marginBottom:6}}>
+      <input style={INP} placeholder="Descrizione" value={it.desc} onChange={e=>si(i,"desc",e.target.value)}/>
+      <input style={INP} type="number" placeholder="Qtà" value={it.qty} onChange={e=>si(i,"qty",e.target.value)}/>
+      <input style={INP} type="number" placeholder="€" value={it.unit} onChange={e=>si(i,"unit",e.target.value)}/>
+      <button onClick={()=>setF(p=>({...p,items:p.items.filter((_,idx)=>idx!==i)}))} style={{...BG,padding:"0 6px",color:"#ef4444",borderColor:"#ef444444"}}>×</button>
+    </div>)}
+    <button onClick={()=>setF(p=>({...p,items:[...p.items,{desc:"",qty:1,unit:""}]}))} style={{...BG,fontSize:12,padding:"6px 12px",marginBottom:14}}>+ Voce</button>
+    <div style={{background:"#1e293b",border:"1px solid #0ea5e9",borderRadius:8,padding:"10px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <span style={{color:"#94a3b8",fontWeight:600}}>TOTALE</span>
+      <span style={{color:"#0ea5e9",fontWeight:800,fontSize:20}}>€ {total.toLocaleString("it-IT")}</span>
+    </div>
+    <Field label="Note"><textarea style={{...INP,minHeight:50,resize:"vertical"}} value={f.notes} onChange={e=>set("notes",e.target.value)}/></Field>
+    <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8,flexWrap:"wrap"}}>
+      {quote&&<button style={{...BG,color:"#ef4444",borderColor:"#ef444444"}} onClick={()=>{onDelete(quote.id);onClose();}}>Elimina</button>}
+      <button style={BG} onClick={onClose}>Annulla</button>
+      <button style={{...BG,color:"#10b981",borderColor:"#10b98144"}} onClick={()=>exportPDF({...f,total},clients)}>📄 PDF</button>
+      <button style={BP} onClick={()=>{onSave({...f,total});onClose();}}>Salva</button>
+    </div>
+  </div>;
+}
+
+function App(){
+  const [tab,setTab]=useState("home");
+  const [bk,setBk]=useState([]);const [cl,setCl]=useState([]);const [qt,setQt]=useState([]);
+  const [modal,setModal]=useState(null);
+
+  useEffect(()=>{const b=load(KEYS.bookings),c=load(KEYS.clients),q=load(KEYS.quotes);if(b)setBk(b);if(c)setCl(c);if(q)setQt(q);},[]);
+  useEffect(()=>save(KEYS.bookings,bk),[bk]);
+  useEffect(()=>save(KEYS.clients,cl),[cl]);
+  useEffect(()=>save(KEYS.quotes,qt),[qt]);
+
+  const savBk=b=>setBk(p=>p.find(x=>x.id===b.id)?p.map(x=>x.id===b.id?b:x):[...p,b]);
+  const delBk=id=>setBk(p=>p.filter(x=>x.id!==id));
+  const savCl=c=>setCl(p=>p.find(x=>x.id===c.id)?p.map(x=>x.id===c.id?c:x):[...p,c]);
+  const delCl=id=>setCl(p=>p.filter(x=>x.id!==id));
+  const savQt=q=>setQt(p=>p.find(x=>x.id===q.id)?p.map(x=>x.id===q.id?q:x):[...p,q]);
+  const delQt=id=>setQt(p=>p.filter(x=>x.id!==id));
+
+  const t=today();
+  const active=bk.filter(b=>b.status==="Confermata"&&b.to>=t);
+  const upcoming=bk.filter(b=>b.from>=t&&b.status!=="Cancellata").sort((a,b)=>a.from.localeCompare(b.from)).slice(0,6);
+  const rev=bk.filter(b=>b.from?.slice(0,7)===t.slice(0,7)).reduce((s,b)=>s+(parseFloat(b.price)||0),0);
+
+  const TABS=[{id:"home",i:"⚓",l:"Home"},{id:"cal",i:"🗓",l:"Cal."},{id:"list",i:"📋",l:"Pren."},{id:"cl",i:"👤",l:"Clienti"},{id:"qt",i:"📄",l:"Prev."},{id:"st",i:"📊",l:"Stat."},{id:"msg",i:"✉️",l:"Msg"}];
+
+  return <div style={{minHeight:"100vh",background:"#0a0f1e",paddingBottom:72}}>
+    {/* Header */}
+    <div style={{background:"#0f172a",borderBottom:"1px solid #1e293b",padding:"12px 18px",display:"flex",alignItems:"center",gap:12,position:"sticky",top:0,zIndex:50}}>
+      <div style={{width:32,height:32,background:"linear-gradient(135deg,#0ea5e9,#0369a1)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚓</div>
+      <div><div style={{color:"#e2e8f0",fontWeight:800,fontSize:16}}>Onda Reale</div><div style={{color:"#475569",fontSize:11}}>Charter Manager</div></div>
+    </div>
+
+    {/* Content */}
+    <div style={{padding:"18px 14px",maxWidth:860,margin:"0 auto"}}>
+
+      {tab==="home"&&<div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:22}}>
+          {[{l:"ATTIVE",v:active.length,c:"#0ea5e9"},{l:"CLIENTI",v:cl.length,c:"#e2e8f0"},{l:"PREVENTIVI",v:qt.filter(q=>q.status==="Inviato").length,c:"#f59e0b"},{l:"MESE €",v:rev.toLocaleString("it-IT"),c:"#10b981"}].map(k=>(
+            <div key={k.l} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:"14px 16px"}}>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:.5}}>{k.l}</div>
+              <div style={{color:k.c,fontSize:22,fontWeight:800,marginTop:4}}>{k.v}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:.5,marginBottom:10}}>PROSSIME PRENOTAZIONI</div>
+        {upcoming.length===0&&<div style={{color:"#64748b",textAlign:"center",padding:24}}>Nessuna prenotazione futura</div>}
+        {upcoming.map(b=><div key={b.id} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"12px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{color:"#e2e8f0",fontWeight:600}}>{b.client}</div><div style={{color:"#64748b",fontSize:12}}>{fmt(b.from)} · {nts(b.from,b.to)} notti</div></div>
+          <Badge color={SC[b.status]} label={b.status}/>
+        </div>)}
+      </div>}
+
+      {tab==="cal"&&<CalView bookings={bk} onAdd={()=>setModal({t:"bk",d:null})} onEdit={b=>setModal({t:"bk",d:b})}/>}
+
+      {tab==="list"&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>Prenotazioni</span>
+          <button style={BP} onClick={()=>setModal({t:"bk",d:null})}>+ Nuova</button>
+        </div>
+        {[...bk].sort((a,b)=>b.from.localeCompare(a.from)).map(b=><div key={b.id} onClick={()=>setModal({t:"bk",d:b})} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"14px 16px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{color:"#e2e8f0",fontWeight:700}}>{b.client}</div>
+            <div style={{color:"#64748b",fontSize:12}}>{fmt(b.from)} → {fmt(b.to)} · {nts(b.from,b.to)} notti</div>
+            {b.deposit&&<div style={{fontSize:11,marginTop:2,color:b.depositPaid?"#10b981":"#f59e0b"}}>{b.depositPaid?"✓":"⏳"} Acconto € {parseFloat(b.deposit).toLocaleString("it-IT")}</div>}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+            <Badge color={SC[b.status]} label={b.status}/>
+            {b.price&&<span style={{color:"#0ea5e9",fontWeight:700,fontSize:13}}>€ {parseFloat(b.price).toLocaleString("it-IT")}</span>}
+          </div>
+        </div>)}
+      </div>}
+
+      {tab==="cl"&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>Clienti</span>
+          <button style={BP} onClick={()=>setModal({t:"cl",d:null})}>+ Cliente</button>
+        </div>
+        {cl.map(c=><div key={c.id} onClick={()=>setModal({t:"cl",d:c})} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"14px 16px",marginBottom:8,cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div><div style={{color:"#e2e8f0",fontWeight:700}}>{c.name}</div><div style={{color:"#64748b",fontSize:12}}>{c.email}{c.phone&&` · ${c.phone}`}</div></div>
+          <span style={{color:"#0ea5e9",fontSize:12,fontWeight:600}}>{bk.filter(b=>b.clientId===c.id).length} pren.</span>
+        </div>)}
+      </div>}
+
+      {tab==="qt"&&<div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{color:"#e2e8f0",fontWeight:700,fontSize:16}}>Preventivi</span>
+          <button style={BP} onClick={()=>setModal({t:"qt",d:null})}>+ Preventivo</button>
+        </div>
+        {qt.map(q=><div key={q.id} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"14px 16px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div onClick={()=>setModal({t:"qt",d:q})} style={{cursor:"pointer",flex:1}}>
+            <div style={{color:"#e2e8f0",fontWeight:700}}>{q.client||cl.find(c=>c.id===q.clientId)?.name||"—"}</div>
+            <div style={{color:"#64748b",fontSize:12}}>{fmt(q.from)} → {fmt(q.to)}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+            <Badge color={QC[q.status]} label={q.status}/>
+            <span style={{color:"#0ea5e9",fontWeight:700}}>€ {(q.total||0).toLocaleString("it-IT")}</span>
+            <button style={{...BG,padding:"3px 8px",fontSize:11,color:"#10b981",borderColor:"#10b98144"}} onClick={()=>exportPDF(q,cl)}>📄 PDF</button>
+          </div>
+        </div>)}
+      </div>}
+
+      {tab==="st"&&<StatsView bookings={bk}/>}
+      {tab==="msg"&&<MessaggiView bookings={bk}/>}
+    </div>
+
+    {/* Bottom nav */}
+    <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#0f172a",borderTop:"1px solid #1e293b",display:"flex",zIndex:50,paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+      {TABS.map(t2=><button key={t2.id} onClick={()=>setTab(t2.id)} style={{flex:1,background:"none",border:"none",cursor:"pointer",padding:"10px 2px 8px",color:tab===t2.id?"#0ea5e9":"#64748b",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        <span style={{fontSize:17}}>{t2.i}</span>
+        <span style={{fontSize:9,fontWeight:tab===t2.id?700:400}}>{t2.l}</span>
+      </button>)}
+    </div>
+
+    {/* Modals */}
+    {modal?.t==="bk"&&<Modal title={modal.d?"Modifica Prenotazione":"Nuova Prenotazione"} onClose={()=>setModal(null)}><BkForm booking={modal.d} clients={cl} onSave={savBk} onDelete={delBk} onClose={()=>setModal(null)}/></Modal>}
+    {modal?.t==="cl"&&<Modal title={modal.d?"Modifica Cliente":"Nuovo Cliente"} onClose={()=>setModal(null)}><ClForm client={modal.d} onSave={savCl} onDelete={delCl} onClose={()=>setModal(null)}/></Modal>}
+    {modal?.t==="qt"&&<Modal title={modal.d?"Modifica Preventivo":"Nuovo Preventivo"} onClose={()=>setModal(null)}><QtForm quote={modal.d} clients={cl} onSave={savQt} onDelete={delQt} onClose={()=>setModal(null)}/></Modal>}
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
